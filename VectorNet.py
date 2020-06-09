@@ -141,7 +141,7 @@ class VectorNet(nn.Module):
 from argoverse.data_loading.argoverse_forecasting_loader import ArgoverseForecastingLoader
 
 ##set root_dir to the correct path to your dataset folder
-root_dir = '../../forecasting_sample/forecasting_val_v1.1/'
+root_dir = 'forecasting_val_v1.1/'
 
 afl = ArgoverseForecastingLoader(root_dir)
 num = len(afl)
