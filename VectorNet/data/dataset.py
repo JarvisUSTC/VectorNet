@@ -88,13 +88,16 @@ class VectorNetDataset(Dataset):
         self.test = test
         afl = ArgoverseForecastingLoader(root)
         self.avm = ArgoverseMap()
-        
-        if self.test:
-            self.afl = afl
+        al = []
+        for d in afl:
+            al.append(d)
+        n = len(al)
+        if self.test == True:
+            self.afl = al
         elif train:
-            self.afl = afl[:int(0.7*len(afl))]
+            self.afl = al[:int(0.7*n)]
         else:
-            self.afl = afl[int(0.7*len(afl)):]
+            self.afl = al[int(0.7*n):]
     
     def __getitem__(self,index):
         '''
