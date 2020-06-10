@@ -45,6 +45,7 @@ def train(**kwargs):
             lr = lr*opt.lr_decay
             
         preloss = losses/num
+    model.save('new.pth')
     
 @torch.no_grad()
 def val(model, dataloader):
@@ -75,8 +76,29 @@ def test(**kwargs):
     '''
     测试（inference）
     '''
-    pass
- 
+    model.load('new.pth')
+    test_data = VectorNetDataset(opt.test_data_root,test = True)
+    test_dataloader = DataLoader(test_data,opt.batch_size,shuffle = False,num_workers = opt.num_workers,collate_fn=collate)
+    criterion = torch.nn.MSELoss()
+    model.eval()
+    losses = 0
+    num = 0
+    for ii,(data,label) in enumerate(test_dataloader):
+        #input = Variable(data)
+        target = Variable(label)
+        if opt.use_gpu:
+            #input = input.cuda()
+            target = target.cuda()
+        if len(data['Map']) == 0:
+            continue
+        score = model(data['Agent'],data['Map'],data['Agentfeature'],data['Mapfeature'])
+        loss = criterion(score.double(),target.double())
+        losses += loss.data
+        num += 1
+    model.train()
+    print('ade:',losses/num)
+    return
+
 def help():
     '''
     打印帮助的信息 
