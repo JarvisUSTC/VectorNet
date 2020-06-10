@@ -52,11 +52,23 @@ class SubNetwork(nn.Module):
             self.gcnlayer.append(GCNLayer(hidden_size,hidden_size*2))
     
     def forward(self,g,inputs):
-        v_feature = inputs
+        g.ndata['v_feature'] = inputs
+        g_batch = g
         for i in range(self.layernums):
-            v_feature = self.encoder[i](v_feature)
-            v_feature = self.gcnlayer[i](g,v_feature)
-        return v_feature
+            g_list = dgl.unbatch(g_batch)
+            #进入MLP需要unbatch
+            for subg in g_list:
+                v_feature = self.encoder[i](subg.ndata['v_feature'])
+                subg.ndata['v_feature'] = v_feature
+            #进入gcn可以batch回来
+            g_batch = dgl.batch(g_list)
+            v_feature = self.gcnlayer[i](g_batch,g_batch.ndata['v_feature'])
+            g_batch.ndata['v_feature'] = v_feature
+        g_list = dgl.unbatch(g_batch)
+        v_feature = []
+        for subg in g_list:
+            v_feature.append(subg.ndata['v_feature'])
+        return torch.stack(v_feature,0)
 
 #self-attention GAT
 class GATLayer(nn.Module):
@@ -118,22 +130,32 @@ class VectorNet(nn.Module):
     
     def forward(self,agent,map_set,agent_feature,map_feature):
         MapOutputs = []
-        Globalfeature = torch.max(self.subAgentNetwork(agent,agent_feature), dim=0)[0].unsqueeze(0)
+        Globalfeature = torch.max(self.subAgentNetwork(agent,agent_feature), dim=1)[0].unsqueeze(0)
         nodeN = 1 + len(map_set)
         for i,graph in enumerate(map_set): 
-            Globalfeature = torch.cat((Globalfeature,torch.max(self.subMapNetwork(graph,map_feature[i]), dim=0)[0].unsqueeze(0)),0)
-        globalgraph = dgl.DGLGraph()
-        globalgraph.add_nodes(nodeN,{'v_feature':Globalfeature})
-        src = []
-        dst = []
-        for i in range(nodeN):
-            for j in range(nodeN):
-                if i != j:
-                    src.append(i)
-                    dst.append(j)
-        globalgraph.add_edges(src,dst)
-        global_feature = self.GlobalNetwork(globalgraph,Globalfeature)
-        return self.MLP(global_feature[0])
+            Globalfeature = torch.cat((Globalfeature,torch.max(self.subMapNetwork(graph,map_feature[i]), dim=1)[0].unsqueeze(0)),0)
+        globalg = []
+        for i in range(Globalfeature.shape[1]):
+            Globalfeature[:,i]
+            globalgraph = dgl.DGLGraph()
+            globalgraph.add_nodes(nodeN,{'v_feature':Globalfeature[:,i]})
+            src = []
+            dst = []
+            for i in range(nodeN):
+                for j in range(nodeN):
+                    if i != j:
+                        src.append(i)
+                        dst.append(j)
+            globalgraph.add_edges(src,dst)
+            globalg.append(globalgraph)
+        g = dgl.batch(globalg)
+        global_feature = self.GlobalNetwork(g,g.ndata['v_feature'])
+        g.ndata['v_feature'] = global_feature
+        globalg = dgl.unbatch(g)
+        v_feature = []
+        for subg in globalg:
+            v_feature.append(subg.ndata['v_feature'][0])
+        return self.MLP(torch.stack(v_feature,0))
     
     def save(self,name=None):
         if name is None:
