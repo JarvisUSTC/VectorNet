@@ -3,7 +3,7 @@ def train(**kwargs):
     '''
     训练
     '''
-    #opt.parse(kwargs)
+    opt.parse(kwargs)
     if opt.load_model_path:
         model.load(opt.load_model_path)
     if opt.use_gpu: model.cuda()
@@ -76,7 +76,12 @@ def test(**kwargs):
     '''
     测试（inference）
     '''
-    model.load('new.pth')
+    opt.parse(kwargs)
+    if opt.load_model_path:
+        model.load(opt.load_model_path)
+    else:
+        model.load('new.pth')
+    if opt.use_gpu: model.cuda()
     test_data = VectorNetDataset(opt.test_data_root,test = True)
     test_dataloader = DataLoader(test_data,opt.batch_size,shuffle = False,num_workers = opt.num_workers,collate_fn=collate)
     criterion = torch.nn.MSELoss()
