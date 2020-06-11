@@ -23,7 +23,7 @@ class DefaultConfig(object):
         根据字典kwargs 更新 config参数
         '''
         # 更新配置参数
-        for k, v in kwargs.iteritems():
+        for k, v in kwargs.items():
             if not hasattr(self, k):
                 # 警告还是报错，取决于你个人的喜好
                 warnings.warn("Warning: opt has not attribut %s" %k)
@@ -31,6 +31,6 @@ class DefaultConfig(object):
             
         # 打印配置信息
         print('user config:')
-        for k, v in self.__class__.__dict__.iteritems():
+        for k, v in self.__class__.__dict__.items():
             if not k.startswith('__'):
                 print(k, getattr(self, k))
