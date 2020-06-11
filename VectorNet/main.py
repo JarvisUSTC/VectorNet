@@ -26,17 +26,24 @@ def train(**kwargs):
             #input = Variable(data)
             target = Variable(label)
             if opt.use_gpu:
-                #input = input.cuda()
+                data['Agent'] = data['Agent'].to(torch.device('cuda:0'))
+                for g in data['Map']:
+                    g = g.to(torch.device('cuda:0'))
+                data['Agentfeature'] = Variable(data['Agentfeature']).cuda()
+                for feature in data['Mapfeature']:
+                    feature = Variable(feature).cuda()
                 target = target.cuda()
             if len(data['Map']) == 0:
                 continue
             optimizer.zero_grad()
-            score = model(data['Agent'],data['Map'],data['Agentfeature'],data['Mapfeature'])
+            score = model(data['Agent'],data['Map'],data['Agentfeature'],data['Mapfeature'],data['Mapmask'])
             loss = criterion(score.double().reshape(-1,60),target.double())
             loss.backward()
             optimizer.step()
             losses += loss.data
             num += 1
+            if num % 10 == 0:
+                print(num)
         model.save()
         TrainingLoss.append(losses/num)
         print('Training:',losses/num)
@@ -60,14 +67,21 @@ def val(model, dataloader):
         #input = Variable(data)
         target = Variable(label)
         if opt.use_gpu:
-            #input = input.cuda()
+            data['Agent'] = data['Agent'].to(torch.device('cuda:0'))
+            for g in data['Map']:
+                g = g.to(torch.device('cuda:0'))
+            data['Agentfeature'] = data['Agentfeature'].cuda()
+            for feature in data['Mapfeature']:
+                feature = Variable(feature).cuda()
             target = target.cuda()
         if len(data['Map']) == 0:
             continue
-        score = model(data['Agent'],data['Map'],data['Agentfeature'],data['Mapfeature'])
+        score = model(data['Agent'],data['Map'],data['Agentfeature'],data['Mapfeature'],data['Mapmask'])
         loss = criterion(score.double(),target.double())
         losses += loss.data
         num += 1
+        if num % 10 == 0:
+            print(num)
     model.train()
     print('eval:',losses/num)
     return losses/num
@@ -81,7 +95,6 @@ def test(**kwargs):
         model.load(opt.load_model_path)
     else:
         model.load('new.pth')
-    if opt.use_gpu: model.cuda()
     test_data = VectorNetDataset(opt.test_data_root,test = True)
     test_dataloader = DataLoader(test_data,opt.batch_size,shuffle = False,num_workers = opt.num_workers,collate_fn=collate)
     criterion = torch.nn.MSELoss()
@@ -96,7 +109,7 @@ def test(**kwargs):
             target = target.cuda()
         if len(data['Map']) == 0:
             continue
-        score = model(data['Agent'],data['Map'],data['Agentfeature'],data['Mapfeature'])
+        score = model(data['Agent'],data['Map'],data['Agentfeature'],data['Mapfeature'],data['Mapmask'])
         loss = criterion(score.double(),target.double())
         losses += loss.data
         num += 1
