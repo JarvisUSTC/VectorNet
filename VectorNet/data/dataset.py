@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 max_nodes = 40
-max_lanes = 45
+max_lanes = 100
 def get_lane_centerlines(argoverse_data,avm):
     '''
     根据车辆位置信息和地图，获取周围的车道信息
@@ -72,6 +72,7 @@ def collate(samples):
     datas,labels = map(list,zip(*samples))
     AgentGraph = [data['Agent'] for data in datas]
     Center = [data['centerAgent'] for data in datas]
+    Mask = [data['Mapmask'] for data in datas]
     batched_graph = dgl.batch(AgentGraph)
     map_set = []
     feature_set = []
@@ -89,10 +90,11 @@ def collate(samples):
 #             feature_set.append(data['Mapfeature'][i])
     new_data = {}
     new_data['Map'] = map_set
-    new_data['Mapfeature'] = feature_set
+    new_data['Mapfeature'] = torch.stack(feature_set,dim = 0)
     new_data['Agent'] = batched_graph
     new_data['Agentfeature'] = batched_graph.ndata['v_feature']
     new_data['centerAgent'] = Center
+    new_data['Mapmask'] = torch.stack(Mask,dim = 0)
     #new_label = []
     #for l in labels:
         #new_label += list(l.flatten())
@@ -136,11 +138,17 @@ class VectorNetDataset(Dataset):
         #把车道组织成向量和图
         map_set = []
         map_feature = []
+        map_mask = []
+        x_min = min(agent_obs_traj[:,0])
+        x_max = max(agent_obs_traj[:,0])
+        y_min = min(agent_obs_traj[:,1])
+        y_max = max(agent_obs_traj[:,1])#进行norm
         for lane in lane_centerlines:
-            lane = (lane - agent_obs_traj[19])#/np.array([x_max-x_min,y_max-y_min])
+            lane = (lane - agent_obs_traj[19])/np.array([x_max-x_min,y_max-y_min])
             graph,features = compose_graph(lane,len(map_set))
             map_set.append(graph)
             map_feature.append(features)
+            map_mask.append(1)
         if len(map_set) < max_lanes:
             while(len(map_set) < max_lanes):
                 #形成空的图，保证大小一致
@@ -148,14 +156,16 @@ class VectorNetDataset(Dataset):
                 graph,features = compose_graph(lane,0)
                 map_set.append(graph)
                 map_feature.append(features)
+                map_mask.append(0)
         else:
             raise Exception("the max lanes is not enough:",len(map_set))
-        agent_obs_traj_norm = (agent_obs_traj - agent_obs_traj[19])#/np.array([x_max-x_min,y_max-y_min])
+        agent_obs_traj_norm = (agent_obs_traj - agent_obs_traj[19])/np.array([x_max-x_min,y_max-y_min])
         graph,features = compose_graph(agent_obs_traj_norm[:20],len(map_set))
         data['Map'] = map_set
         data['Mapfeature'] = map_feature
         data['Agent'] = graph
         data['Agentfeature'] = features
+        data['Mapmask'] = torch.Tensor(map_mask)
         label = agent_obs_traj_norm[20:50]
         return data,label.flatten()
     
