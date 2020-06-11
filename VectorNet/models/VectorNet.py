@@ -128,11 +128,14 @@ class VectorNet(nn.Module):
         self.GlobalNetwork = GATLayer(hidden_size*2,hidden_size*2)
         self.MLP = nn.Linear(hidden_size*2,out_dim)
     
-    def forward(self,agent,map_set,agent_feature,map_feature):
+    def forward(self,agent,map_set,agent_feature,map_feature,map_mask):
         MapOutputs = []
         Globalfeature = torch.max(self.subAgentNetwork(agent,agent_feature), dim=1)[0].unsqueeze(0)
-        nodeN = 1 + len(map_set)
-        for i,graph in enumerate(map_set): 
+        max_mask = torch.max(torch.sum(map_mask,dim = 1),dim = 0)[0].int()
+        nodeN = 1 + max_mask
+        for i,graph in enumerate(map_set):
+            if i >= max_mask:
+                break
             Globalfeature = torch.cat((Globalfeature,torch.max(self.subMapNetwork(graph,map_feature[i]), dim=1)[0].unsqueeze(0)),0)
         globalg = []
         for i in range(Globalfeature.shape[1]):
