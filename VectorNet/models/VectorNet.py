@@ -144,11 +144,16 @@ class VectorNet(nn.Module):
             globalgraph.add_nodes(nodeN,{'v_feature':Globalfeature[:,i]})
             src = []
             dst = []
-            for i in range(nodeN):
-                for j in range(nodeN):
-                    if i != j:
-                        src.append(i)
-                        dst.append(j)
+            #加入mask
+            for j in range(nodeN):
+                if j!=0 and map_mask[i][j-1] == 0:
+                    break
+                for k in range(nodeN):
+                    if k!=0 and map_mask[i][k-1] == 0:
+                        break
+                    if j != k:
+                        src.append(j)
+                        dst.append(k)
             globalgraph.add_edges(src,dst)
             globalg.append(globalgraph)
         g = dgl.batch(globalg)
