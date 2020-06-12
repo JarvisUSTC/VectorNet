@@ -98,7 +98,7 @@ def collate(samples):
     #new_label = []
     #for l in labels:
         #new_label += list(l.flatten())
-    return new_data,torch.tensor(labels).reshape(-1,60)
+    return new_data,torch.stack(labels,dim = 0).reshape(-1,60)
 
 class VectorNetDataset(Dataset):
     '''
@@ -166,7 +166,12 @@ class VectorNetDataset(Dataset):
         data['Agent'] = graph
         data['Agentfeature'] = features
         data['Mapmask'] = torch.Tensor(map_mask)
-        label = agent_obs_traj_norm[20:50]
+        label = []
+        for i in range(19,49):
+            label.append(torch.Tensor(agent_obs_traj_norm[i+1]-agent_obs_traj_norm[i]))
+            #label = agent_obs_traj_norm[20:50]
+            #以dx,dy作为特征
+        label = torch.stack(label,dim = 0)
         return data,label.flatten()
     
     def __len__(self):
