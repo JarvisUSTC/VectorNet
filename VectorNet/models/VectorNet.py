@@ -70,6 +70,22 @@ class SubNetwork(nn.Module):
             v_feature.append(subg.ndata['v_feature'])
         return torch.stack(v_feature,0)
 
+class SelfAttention(nn.Module):
+    def __init__(self,in_dim,out_dim):
+        super(SelfAttention, self).__init__()
+        self.wq = torch.nn.Parameter(torch.randn(in_dim,out_dim))
+        self.wk = torch.nn.Parameter(torch.randn(in_dim,out_dim))
+        self.wv = torch.nn.Parameter(torch.randn(in_dim,out_dim))
+    
+    def forward(self,input_feature):
+        WQ = input_feature.mm(self.wq)
+        WK = input_feature.mm(self.wk)
+        WV = input_feature.mm(self.wv)
+        QK = WQ.mm(WK.T)
+        QK = F.softmax(QK,dim = 1)
+        V = QK.mm(WV)
+        return V
+
 #self-attention GAT
 class GATLayer(nn.Module):
     def __init__(self, in_dim, out_dim):
@@ -125,8 +141,13 @@ class VectorNet(nn.Module):
         super(VectorNet,self).__init__()
         self.subMapNetwork = SubNetwork(in_dim,hidden_size,3)
         self.subAgentNetwork = SubNetwork(in_dim,hidden_size,3)
-        self.GlobalNetwork = GATLayer(hidden_size*2,hidden_size*2)
-        self.MLP = nn.Linear(hidden_size*2,out_dim)
+        self.GlobalNetwork = SelfAttention(hidden_size*2,hidden_size*2)#GATLayer(hidden_size*2,hidden_size*2)
+        self.MLP = nn.Sequential(
+            nn.Linear(hidden_size*2,hidden_size*2),
+            #nn.LayerNorm(hidden_size),
+            nn.Tanh(),
+            nn.Linear(hidden_size*2,out_dim)
+        )
     
     def forward(self,agent,map_set,agent_feature,map_feature,map_mask):
         MapOutputs = []
@@ -137,32 +158,33 @@ class VectorNet(nn.Module):
             if i >= max_mask:
                 break
             Globalfeature = torch.cat((Globalfeature,torch.max(self.subMapNetwork(graph,map_feature[i]), dim=1)[0].unsqueeze(0)),0)
-        globalg = []
-        for i in range(Globalfeature.shape[1]):
-            Globalfeature[:,i]
-            globalgraph = dgl.DGLGraph()
-            globalgraph.add_nodes(nodeN,{'v_feature':Globalfeature[:,i]})
-            src = []
-            dst = []
-            #加入mask
-            for j in range(nodeN):
-                if j!=0 and map_mask[i][j-1] == 0:
-                    break
-                for k in range(nodeN):
-                    if k!=0 and map_mask[i][k-1] == 0:
-                        break
-                    if j != k:
-                        src.append(j)
-                        dst.append(k)
-            globalgraph.add_edges(src,dst)
-            globalg.append(globalgraph)
-        g = dgl.batch(globalg)
-        global_feature = self.GlobalNetwork(g,g.ndata['v_feature'])
-        g.ndata['v_feature'] = global_feature
-        globalg = dgl.unbatch(g)
+#         globalg = []
         v_feature = []
-        for subg in globalg:
-            v_feature.append(subg.ndata['v_feature'][0])
+        for i in range(Globalfeature.shape[1]):
+            v_feature.append(self.GlobalNetwork(Globalfeature[:,i])[0])
+#             Globalfeature[:,i]
+#             globalgraph = dgl.DGLGraph()
+#             globalgraph.add_nodes(nodeN,{'v_feature':Globalfeature[:,i]})
+#             src = []
+#             dst = []
+#             #加入mask
+#             for j in range(nodeN):
+#                 if j!=0 and map_mask[i][j-1] == 0:
+#                     break
+#                 for k in range(nodeN):
+#                     if k!=0 and map_mask[i][k-1] == 0:
+#                         break
+#                     if j != k:
+#                         src.append(j)
+#                         dst.append(k)
+#             globalgraph.add_edges(src,dst)
+#             globalg.append(globalgraph)
+#         g = dgl.batch(globalg)
+#         global_feature = self.GlobalNetwork(g,g.ndata['v_feature'])
+#         g.ndata['v_feature'] = global_feature
+#         globalg = dgl.unbatch(g)
+#         for subg in globalg:
+#             v_feature.append(subg.ndata['v_feature'][0])
         return self.MLP(torch.stack(v_feature,0))
     
     def save(self,name=None):
